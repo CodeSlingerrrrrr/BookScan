@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Book Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; text-align: center; }
+    #reader { width: 300px; margin: auto; }
+    #result { margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>Scan Book ISBN</h2>
+  <div id="reader"></div>
+  <div id="result">Scan a barcode...</div>
+
+  <script>
+    const sheetWebhookURL = "https://script.google.com/macros/s/AKfycbyLpYGpnW1bygn8StfgngfM3CsvXBLEND5DC8ApsqnJHKYjMAxOprvDHEQ2B_oOajmpOw/exec"; // <-- paste here
+
+    function fetchBookInfo(isbn) {
+      fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.totalItems === 0) {
+            document.getElementById("result").innerText = "Book not found.";
+            return;
+          }
+
+          const book = data.items[0].volumeInfo;
+          const title = book.title || "Unknown Title";
+          const author = (book.authors || ["Unknown Author"]).join(", ");
+          const category = (book.categories || ["Unknown"]).join(", ");
+
+          document.getElementById("result").innerHTML = `
+            <p><strong>ISBN:</strong> ${isbn}</p>
+            <p><strong>Title:</strong> ${title}</p>
+            <p><strong>Author:</strong> ${author}</p>
+            <p><strong>Category:</strong> ${category}</p>
+          `;
+
+          // Send to Google Sheet
+          fetch(sheetWebhookURL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isbn, title, author, category })
+          });
+        })
+        .catch(() => {
+          document.getElementById("result").innerText = "Error fetching book data.";
+        });
+    }
+
+    function startScanner() {
+      const html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (scannedText) => {
+          if (/^\d{10,13}$/.test(scannedText)) {
+            html5QrCode.stop(); // Stop scanning after one successful read
+            fetchBookInfo(scannedText);
+          }
+        },
+        (error) => {}
+      );
+    }
+
+    startScanner();
+  </script>
+
+</body>
+</html>
